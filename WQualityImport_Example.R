@@ -68,7 +68,7 @@ for (s in 1:ls) { # start the loop for sites
     #convert the xml into a dataframe of measurement results
     #with basic error handling
     wqdata<-tryCatch({
-      xmlHilltopMeasurement(dataxml)
+      hilltopMeasurement(dataxml)
     }, error=function(err){message(paste("Error retrieving", site, measurement))})  
     
     toutput<-rbind(toutput,wqdata)#append the data to the dataframe called toutput (temporary dataframe)
@@ -84,7 +84,7 @@ for (s in 1:ls) { # start the loop for sites
   ##convert the xml to a dataframe of WQ Sample results
   #with basic error handling added
   wqSampleData<-tryCatch({
-    xmlHilltopMeasurementToDF(wqdataxml)
+    hilltopMeasurementToDF(wqdataxml)
   }, error=function(err){message(paste("Error retrieving", site, "WQ Sample Information"))})
   
   #merge the WQ Sample data with the measurement data with basic error handling.
@@ -116,3 +116,5 @@ output<-rbind(censured,nocensure)
 testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Mohaka River D/S Taharua River Confluence&measurement=Total Phosphorus[Total Phosphorus]&From=1/1/2004"
 #testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Porangahau River at SH52 Opposite Quarry&Measurement=WQ Sample&From=1/1/2004"
 #testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Awanui%20Stream%20at%20Flume&measurement=WQ%20Sample&From=1/1/2004"
+testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=MeasurementList&Site=Mohaka River D/S Taharua River Confluence"
+dataxml<-xmlParse(url)

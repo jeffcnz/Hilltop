@@ -13,68 +13,68 @@ require(plyr)
 #Get a list of sites available from a service
 #May be able to tidy this and use similar method to getting measurement data.
 
-hillSiteList<-function(endpoint){
+hilltopSiteList <- function(endpoint) {
   
-  url<-paste(endpoint,"?service=Hilltop&Request=SiteList", sep="")
-  sitexml<-xmlInternalTreeParse(url)
-  s<-getNodeSet(sitexml, "//HilltopServer/Site")
-  hillsites<-sapply(s,function(el) xmlGetAttr(el, "Name"))
+  url <- paste(endpoint, "?service=Hilltop&Request=SiteList", sep = "")
+  sitexml <- xmlInternalTreeParse(url)
+  s <- getNodeSet(sitexml, "//HilltopServer/Site")
+  hillsites <- sapply(s, function(el) xmlGetAttr(el, "Name"))
   return(hillsites)
 }
 
-#helper function to get a dataframe of datasources available at a site, given an xml document from a measurementlist request.
-#May be able to tidy this and use similar method to getting measurement data.
-dataSourcesAtSite<-function(parsedxml){
-  dsheaders<-c("NumItems", "TSType", "DataType", "Interpolation", "ItemFormat", "From", "To")
+
+hilltopDsMeasList <- function(measlistxml) {
+  #Helper function.
+  #Takes an xml document from a Hilltop MeasurementList at a Site request. 
+  #Returns a dataframe of the datasource information and measurements names.
+  dstemp <- do.call(rbind, xpathApply(measlistxml, "/HilltopServer/DataSource", function(node) {
+    xp <- "./*"
+    datasource <- xmlGetAttr(node, "Name")
+    type <- xpathSApply(node, "./TSType", xmlValue)
+    datasourceid <- paste(type, datasource)
+    attribute <- xpathSApply(node, xp, xmlName)
+    value <- xpathSApply(node, xp, function(x) {
+      if(xmlName(x) == "Measurement") {xmlGetAttr(x, "Name") } else {xmlValue(x) }
+    } )
+    data.frame(datasourceid, datasource, attribute, value, stringsAsFactors = FALSE)
+  } ) )
+  ds <- subset(dstemp, attribute != "Measurement")
+  meas <- subset(dstemp, attribute == "Measurement", select = c("datasourceid", "value") )
+  colnames(meas) [which(names(meas) == "value") ] <- "MeasurementName"
+  castds <- dcast(ds, datasourceid + datasource ~ attribute, value.var = "value")
+  castds <- merge(castds, meas, all = TRUE)
+  castds <- subset(castds, select= -c(datasourceid) )
   
-  
-  datasourcename<-xmlSApply(getNodeSet(measxml, "//DataSource"), function(el) xmlGetAttr(el, "Name"))
-  datasources<-data.frame(datasourcename)
-  for(h in 1:length(dsheaders)){
-    col<-dsheaders[h]
-    datasources[[col]]<-xmlSApply(getNodeSet(measxml, paste("//DataSource/",col,sep="")), xmlValue)
-    
-  }
-  return(datasources)
+  return(castds)
 }
 
-#Get a list of measurements available at a site
-#May be able to tidy this and use similar method to getting measurement data.
 
-measAtSite<-function(endpoint, site){
-  url<-paste(endpoint,"?service=Hilltop&Request=MeasurementList&Site=",site, sep="")
-  measxml<-xmlInternalTreeParse(url)
-  d<-getNodeSet(measxml, "//HilltopServer/DataSource")
-  #The datasource provides information about the measurement that will be useful.
-  #Bring in the datasource information first as each datasource can have multiple measurements
-  datasourcename<-dataSourcesAtSite(measxml)
+hilltopMeasInfoList <- function(measlistxml) {
+  #Helper function.
+  #Takes an xml document from a Hilltop MeasurementList at a Site request. 
+  #Returns a dataframe of the measurement information and datasources.
+  dstemp <- do.call(rbind, xpathApply(measlistxml, "/HilltopServer/DataSource/Measurement", function(node) {
+    xp <- "./*"
+    datasource <- xpathSApply(node, "..", function(x) {xmlGetAttr(x, "Name") } )
+    MeasurementName <- xmlGetAttr(node, "Name")
+    measurementid <- paste(datasource, MeasurementName)
+    attribute <- xpathSApply(node, xp, xmlName)
+    value <- xpathSApply(node, xp, xmlValue) 
+    data.frame(measurementid, datasource, MeasurementName, attribute, value, stringsAsFactors = FALSE)
+  } ) )
+  castmeas <- dcast(dstemp, measurementid + datasource + MeasurementName ~ attribute, value.var = "value")
+  castmeas <- subset(castmeas, select = -c(measurementid) )
   
-  #There can be multiple measurements associated with a datasource.
-  measheaders<-c("Item", "DefaultMeasurement", "RequestAs", "Units","Format")  
-  #need to work through the datasources and get measurements for each, but qualityseries don't have measurements
-  for(ds in 1:length(d)){
-    measurementname<-xmlSApply(getNodeSet(measxml, paste("//DataSource[",ds,"]/Measurement",sep="")), function(el) xmlGetAttr(el, "Name"))
-    temp<-data.frame(measurementname)
-    temp$datasourcename<-xmlSApply(getNodeSet(measxml, paste("//DataSource[",ds,"]",sep="")), function(el) xmlGetAttr(el, "Name"))
-    for(mh in 1:length(measheaders)){
-      mcol<-measheaders[mh]
-      temp[[mcol]]<-xmlSApply(getNodeSet(measxml, paste("//DataSource[",ds,"]/Measurement/",mcol,sep="")), xmlValue)
-      
-    if(ds==1){
-      measurements<-temp
-    }else{
-      measurements<-rbind(measurements, temp)
-    }  
-    }
-    
-    
-  }
-  
-  output<-merge(datasources, measurements)
-  #sitemeas<-sapply(m,function(el) xmlGetAttr(el, "Name"))
-  return(output)
-  
-  
+  return(castmeas)
+}
+
+hilltopDsMeasListFull <- function(measlistxml) {
+  #Takes an xml document from a Hilltop MeasurementList at a Site request. 
+  #Returns a dataframe of all of the datasource and measurement information combined.
+  t<-hilltopDsMeasList(measlistxml)
+  m<-hilltopMeasInfoList(measlistxml)
+  full<-merge(t, m, by = c("datasource", "MeasurementName") , all = TRUE)
+  return(full)
 }
 
 
@@ -85,80 +85,80 @@ measAtSite<-function(endpoint, site){
 #url<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Esk%20River%20at%20Waipunga%20Bridge&Measurement=Total%20Nitrogen&From=1/1/2004"
 #dataxml<-xmlParse(url)
 
-#Helper function to return the appropriate xml value depending whether the value of interest is from a named node,
-#or is a named parameter.
-xmlHilltopValueHelper<-function(x){
-  if(xmlName(x) != "T"){
-    if(xmlName(x) == "Parameter"){
+
+hilltopValueHelper <- function(x) {
+  #Helper function to return the appropriate xml value depending whether the value of interest is from a named node,
+  #or is a named parameter.
+  if(xmlName(x) != "T") {
+    if(xmlName(x) == "Parameter") {
       return(xmlGetAttr(x, "Value"))
-    }else{return(xmlValue(x))}
+    } else {return(xmlValue(x)) }
   }
 }
 
-#Helper function to return the appropriate xml attribute name depending whether the attribute of interest is from a named node,
-#or is a named parameter.
-xmlHilltopAttributeHelper<-function(x){
-  if(xmlName(x) != "T"){
-    if(xmlName(x) == "Parameter"){
+
+hilltopAttributeHelper <- function(x) {
+  #Helper function to return the appropriate xml attribute name depending whether the attribute of interest is from a named node,
+  #or is a named parameter.
+  if(xmlName(x) != "T") {
+    if(xmlName(x) == "Parameter") {
       return(xmlGetAttr(x, "Name"))
-    }else{return(xmlName(x))}
+    } else {return(xmlName(x)) }
   }
 }
 
-#Helper function that reads the nodes within a the Measurement node of a Hilltop XML response
-#from a xmlParse(url) request such as dataxml<-xmlParse(url).
-#Returns a dataframe of the data for each timestamp.
-#Handles missing results and doen't require prior knowledge of parameter names.
-#Handles true measurements and WQ Sample requests
-#To do, add a subsetting option so only some columns are returned.
-xmlHilltopMeasurementToDF<-function(dataxml){
+
+hilltopMeasurementToDF <- function(dataxml) {
+  #Helper function that reads the nodes within a the Measurement node of a Hilltop XML response
+  #from a xmlParse(url) request such as dataxml<-xmlParse(url).
+  #Returns a dataframe of the data for each timestamp.
+  #Handles missing results and doen't require prior knowledge of parameter names.
+  #Handles true measurements and WQ Sample requests
   idNodes <- getNodeSet(dataxml, "//Measurement/Data/E")
-  Times<-lapply(idNodes,xpathApply,path = "./T", xmlValue)
-  values <- lapply(idNodes, xpathApply, path = "./*", xmlHilltopValueHelper)
-  attributes <- lapply(idNodes, xpathApply, path = "./*", xmlHilltopAttributeHelper)
-  #Intermittent issue with below, only for some sites and measurments!
-  #data<-do.call(rbind.data.frame, mapply(cbind, Times, attributes, values))
-  #changed above line to below
-  data<-do.call(rbind.data.frame, Reduce(function(x,y) Map(cbind, x, y),list(Times, attributes,values)))
-  names(data)<-c("Time", "Attribute", "Content")
-  data<-data[!(data$Attribute == "NULL"), ]
-  data<-data.frame(lapply(data, as.character), stringsAsFactors=FALSE)
-  cdata<-dcast(data, Time ~ Attribute, value.var= "Content")
-  cdata$Time<-as.POSIXct(strptime(cdata$Time, format="%Y-%m-%dT%H:%M:%S"))
+  Times <- lapply(idNodes, xpathApply, path = "./T", xmlValue)
+  values <- lapply(idNodes, xpathApply, path = "./*", hilltopValueHelper)
+  attributes <- lapply(idNodes, xpathApply, path = "./*", hilltopAttributeHelper)
+  data <- do.call(rbind.data.frame, Reduce(function(x,y) Map(cbind, x, y), list(Times, attributes, values)))
+  names(data) <- c("Time", "Attribute", "Content")
+  data <- data[!(data$Attribute == "NULL"), ]
+  data <- data.frame(lapply(data, as.character), stringsAsFactors = FALSE)
+  cdata <- dcast(data, Time ~ Attribute, value.var = "Content")
+  cdata$Time <- as.POSIXct(strptime(cdata$Time, format = "%Y-%m-%dT%H:%M:%S"))
   return(cdata)
 }
 
-#Helper function that reads the nodes within a the DataSource ItemInfo node of a Hilltop XML response
-#from a xmlParse(url) request such as dataxml<-xmlParse(url).
-#Returns a dataframe of the Info for each Item.
-#Handles missing results and doen't require prior knowledge of the items.
-#To do, add a subsetting option so only some columns are returned.
-xmlHilltopDataSourceToDF<-function(dataxml){
+
+hilltopDataSourceToDF<-function(dataxml) {
+  #Helper function that reads the nodes within a the DataSource ItemInfo node of a Hilltop XML response
+  #from a xmlParse(url) request such as dataxml<-xmlParse(url).
+  #Returns a dataframe of the Info for each Item.
+  #Handles missing results and doen't require prior knowledge of the items.
   idNodes <- getNodeSet(dataxml, "//Measurement/DataSource")
-  Item<-lapply(idNodes,xpathApply,path = "./ItemInfo", xmlGetAttr, "ItemNumber")
-  values <- lapply(idNodes, xpathApply, path = "./ItemInfo/*", xmlHilltopValueHelper)
-  attributes <- lapply(idNodes, xpathApply, path = "./ItemInfo/*", xmlHilltopAttributeHelper)
-  data<-data.frame(Attribute=unlist(attributes), Content=unlist(values))
-  data$Item<-unlist(Item)
-  data<-data[!(data$Attribute == "NULL"), ]
-  data<-data.frame(lapply(data, as.character), stringsAsFactors=FALSE)
-  cdata<-dcast(data, Item ~ Attribute, value.var= "Content")
+  Item <- lapply(idNodes, xpathApply, path = "./ItemInfo", xmlGetAttr, "ItemNumber")
+  values <- lapply(idNodes, xpathApply, path = "./ItemInfo/*", hilltopValueHelper)
+  attributes <- lapply(idNodes, xpathApply, path = "./ItemInfo/*", hilltopAttributeHelper)
+  data <- data.frame(Attribute = unlist(attributes), Content = unlist(values))
+  data$Item <- unlist(Item)
+  data <- data[!(data$Attribute == "NULL"), ]
+  data <- data.frame(lapply(data, as.character), stringsAsFactors = FALSE)
+  cdata <- dcast(data, Item ~ Attribute, value.var = "Content")
   return(cdata)
 }
 
-#Main function that converts a Hilltop XML document 
-#from a xmlParse(url) request such as dataxml<-xmlParse(url)
-#for a water quality measurement into a 
-#dataframe that contains the measurement information.
-#It returns a dataframe of the data for each timestamp, including DataSource Information and the Site Name.
-#This dataframe can be merged with a WQ Sample dataframe processed using xmlHilltopMeasurementToDF
-xmlHilltopMeasurement<-function(dataxml){
-  Site<-dataxml[["string(//Measurement/@SiteName)"]]
-  df<-xmlHilltopMeasurementToDF(dataxml)
-  df$Site<-Site
-  items<-xmlHilltopDataSourceToDF(dataxml)
-  df$Measurement<-items$ItemName
-  df$Units<-if(is.null(items$Units)){c("")}else{items$Units}
+
+hilltopMeasurement<-function(dataxml){
+  #Main function that converts a Hilltop XML document 
+  #from a xmlParse(url) request such as dataxml<-xmlParse(url)
+  #for a water quality measurement into a 
+  #dataframe that contains the measurement information.
+  #It returns a dataframe of the data for each timestamp, including DataSource Information and the Site Name.
+  #This dataframe can be merged with a WQ Sample dataframe processed using xmlHilltopMeasurementToDF
+  Site <- dataxml[["string(//Measurement/@SiteName)"]]
+  df <- hilltopMeasurementToDF(dataxml)
+  df$Site <- Site
+  items <- hilltopDataSourceToDF(dataxml)
+  df$Measurement <- items$ItemName
+  df$Units <- if(is.null(items$Units)) {c("")} else {items$Units}
   return(df)
 }
 
