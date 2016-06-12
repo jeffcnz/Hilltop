@@ -2,24 +2,38 @@
 # Jeff Cooke May 2016
 
 #Install the required packages
-pkgs <- c('XML', 'reshape2', 'plyr')
+pkgs <- c('XML', 'reshape2', 'plyr', 'RCurl')
 if(!all(pkgs %in% installed.packages()[, 'Package']))
   install.packages(pkgs, dep = T)
 
 require(XML)  
 require(reshape2)
 require(plyr)
+require(RCurl)
 
 #Get a list of sites available from a service
 #May be able to tidy this and use similar method to getting measurement data.
 
-hilltopSiteList <- function(endpoint) {
+
+hilltopSiteList <- function(sitexml) {
+  #Takes an parsed xml document from a Hilltop SiteList request. 
+  #Returns a dataframe of the available sites and location if available.
+  stemp <- do.call(rbind, xpathApply(sitexml, "/HilltopServer/Site", function(node) {
+    xp <- "./*"
+    site <- xmlGetAttr(node, "Name")
+    if(length(xmlChildren(node)) < 2) {
+      attribute <- "NoLocation"
+      value <- "NA"
+    } else {
+      attribute <- xpathSApply(node, xp, xmlName)
+      value <- xpathSApply(node, xp, xmlValue) 
+    }
+    data.frame(site, attribute, value, stringsAsFactors = FALSE)
+  } ) )
+  castsite <- dcast(stemp, site ~ attribute, value.var = "value")
+  castsite <- subset(castsite, select = -c(NoLocation) )
   
-  url <- paste(endpoint, "?service=Hilltop&Request=SiteList", sep = "")
-  sitexml <- xmlInternalTreeParse(url)
-  s <- getNodeSet(sitexml, "//HilltopServer/Site")
-  hillsites <- sapply(s, function(el) xmlGetAttr(el, "Name"))
-  return(hillsites)
+  return(castsite)
 }
 
 
@@ -68,6 +82,7 @@ hilltopMeasInfoList <- function(measlistxml) {
   return(castmeas)
 }
 
+
 hilltopDsMeasListFull <- function(measlistxml) {
   #Takes an xml document from a Hilltop MeasurementList at a Site request. 
   #Returns a dataframe of all of the datasource and measurement information combined.
@@ -76,14 +91,6 @@ hilltopDsMeasListFull <- function(measlistxml) {
   full<-merge(t, m, by = c("datasource", "MeasurementName") , all = TRUE)
   return(full)
 }
-
-
-#working and test
-
-#url<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Porangahau%20River%20at%20SH52%20Opposite%20Quarry&Measurement=WQ%20Sample&From=1/1/2004"
-#url<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Porangahau River at SH52 Opposite Quarry&Measurement=Total Nitrogen&From=1/1/2004"
-#url<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Esk%20River%20at%20Waipunga%20Bridge&Measurement=Total%20Nitrogen&From=1/1/2004"
-#dataxml<-xmlParse(url)
 
 
 hilltopValueHelper <- function(x) {
@@ -110,7 +117,7 @@ hilltopAttributeHelper <- function(x) {
 
 hilltopMeasurementToDF <- function(dataxml) {
   #Helper function that reads the nodes within a the Measurement node of a Hilltop XML response
-  #from a xmlParse(url) request such as dataxml<-xmlParse(url).
+  #from a anyXmlParse(url) request such as dataxml<-anyXmlParse(url).
   #Returns a dataframe of the data for each timestamp.
   #Handles missing results and doen't require prior knowledge of parameter names.
   #Handles true measurements and WQ Sample requests
@@ -124,13 +131,14 @@ hilltopMeasurementToDF <- function(dataxml) {
   data <- data.frame(lapply(data, as.character), stringsAsFactors = FALSE)
   cdata <- dcast(data, Time ~ Attribute, value.var = "Content")
   cdata$Time <- as.POSIXct(strptime(cdata$Time, format = "%Y-%m-%dT%H:%M:%S"))
+  colnames(cdata)[colnames(cdata)=="I1"] <- "Value"
   return(cdata)
 }
 
 
 hilltopDataSourceToDF<-function(dataxml) {
   #Helper function that reads the nodes within a the DataSource ItemInfo node of a Hilltop XML response
-  #from a xmlParse(url) request such as dataxml<-xmlParse(url).
+  #from a anyXmlParse(url) request such as dataxml<-anyXmlParse(url).
   #Returns a dataframe of the Info for each Item.
   #Handles missing results and doen't require prior knowledge of the items.
   idNodes <- getNodeSet(dataxml, "//Measurement/DataSource")
@@ -148,7 +156,7 @@ hilltopDataSourceToDF<-function(dataxml) {
 
 hilltopMeasurement<-function(dataxml){
   #Main function that converts a Hilltop XML document 
-  #from a xmlParse(url) request such as dataxml<-xmlParse(url)
+  #from a anyXmlParse(url) request such as dataxml<-anyXmlParse(url)
   #for a water quality measurement into a 
   #dataframe that contains the measurement information.
   #It returns a dataframe of the data for each timestamp, including DataSource Information and the Site Name.
@@ -162,5 +170,23 @@ hilltopMeasurement<-function(dataxml){
   return(df)
 }
 
+is.hilltopXml <- function(xmldata){
+  #checks if an xml document is hilltop xml, returns True or False accordingly.
+  server <- xmlName(xmlRoot(xmldata))
+  if(length(grep("Hilltop",server))>0) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
 
+anyXmlParse <- function(url) {
+  #Helper function to parse data from a hilltop server.
+  #Takes a valid url as an input and returns a parsed xml document ready for other functions.
+  #Handles https requests as well as http
+  if(length(grep("https",url))>0){
+    doc <- getURL(url, ssl.verifypeer = FALSE)
+    return(xmlParse(doc))
+  } else {return(xmlParse(url))}
+}
 

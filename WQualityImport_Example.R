@@ -117,4 +117,10 @@ testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=G
 #testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Porangahau River at SH52 Opposite Quarry&Measurement=WQ Sample&From=1/1/2004"
 #testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Awanui%20Stream%20at%20Flume&measurement=WQ%20Sample&From=1/1/2004"
 testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=MeasurementList&Site=Mohaka River D/S Taharua River Confluence"
-dataxml<-xmlParse(url)
+testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Ngaruroro River at Fernhill&Measurement=Total Nitrogen&From=1/6/2014"
+testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=GetData&Site=Ngaruroro River at Fernhill&Measurement=Flow[Water Level]&From=1/6/2016"
+testurl<-"http://hilltopserver.horizons.govt.nz/data.hts?service=Hilltop&Request=MeasurementList&Site=Manawatu at Teachers College"
+testurl<-"http://data.hbrc.govt.nz/EnviroData/Emar.hts?Service=Hilltop&Request=MeasurementList&Site=Aniwaniwa Park HQ"
+
+dataxml<-xmlParse(testurl)
+test1 <- hilltopMeasurement(dataxml)
