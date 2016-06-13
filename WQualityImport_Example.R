@@ -8,7 +8,7 @@
 
 
 #set the source of the Hilltop.R file, this will need editing and un commenting
-#source("~/Coding/R/Shiny/HilltopClient/Hilltop.R")
+#source("Hilltop.R")
 
 
 
@@ -25,7 +25,7 @@
 
 
 
-#Need to bring in a site list and measurement list.
+#Bring in a site list and measurement list.
 #For testing purposes examples are provided as vectors for the data frame.
 WQSites<-NULL
 WQMeasurements<-NULL
@@ -43,7 +43,7 @@ WQMeasurements$Measurements<-c("Total Phosphorus[Total Phosphorus]", "Dissolved 
 startDate<-"1/1/2004"
 endDate<-"1/1/2015"
 
-vendor <- "HILLTOP"
+#vendor <- "HILLTOP"
 
 
 tss_url <- "http://data.hbrc.govt.nz/EnviroData/Emar.hts?"
@@ -96,8 +96,8 @@ for (s in 1:ls) { # start the loop for sites
 
 
 #Convert values to numbers and handle censured data
-#Put this in a function
-#currently only dealing with less than figures, not greater than and halving less than figures
+#TO DO: Put this in a function
+#currently only dealing with less than figures, not greater than and simply halving less than figures as this is adequate for plotting
 
 censured<-subset(output, substring(output$Value,1,1)=="<")
 
