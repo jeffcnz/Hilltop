@@ -31,7 +31,10 @@ hilltopSiteList <- function(sitexml) {
     data.frame(site, attribute, value, stringsAsFactors = FALSE)
   } ) )
   castsite <- dcast(stemp, site ~ attribute, value.var = "value")
-  castsite <- subset(castsite, select = -c(NoLocation) )
+  if(!is.null(castsite$NoLocation)) {
+    castsite <- subset(castsite, select = -c(NoLocation) )
+  }
+  
   
   return(castsite)
 }
