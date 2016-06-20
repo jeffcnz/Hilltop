@@ -95,6 +95,27 @@ hilltopDsMeasListFull <- function(measlistxml) {
   return(full)
 }
 
+hilltopMeasInfoListExtra <- function(measlistxml) {
+  #Helper function.
+  #Takes an xml document from a Hilltop MeasurementList at a Site request. 
+  #Returns a dataframe of the measurement information and datasource info.
+  dstemp <- do.call(rbind, xpathApply(measlistxml, "/HilltopServer/DataSource/Measurement", function(node) {
+    xp <- "./*"
+    datasource <- xpathSApply(node, "..", function(x) {xmlGetAttr(x, "Name") } )
+    MeasurementName <- xmlGetAttr(node, "Name")
+    TSType <- xpathSApply(node, "../TSType", xmlValue)
+    DataType <- xpathSApply(node, "../DataType", xmlValue)
+    Interpolation <- xpathSApply(node, "../Interpolation", xmlValue)
+    From <- xpathSApply(node, "../From", xmlValue)
+    To <- xpathSApply(node, "../To", xmlValue)
+    attribute <- xpathSApply(node, xp, xmlName)
+    value <- xpathSApply(node, xp, xmlValue) 
+    data.frame(datasource, MeasurementName, TSType, DataType, Interpolation, From, To, attribute, value, stringsAsFactors = FALSE)
+  } ) )
+  castmeas <- dcast(dstemp, datasource + TSType + DataType + Interpolation + From + To + MeasurementName ~ attribute, value.var = "value")
+  
+  return(castmeas)
+}
 
 hilltopValueHelper <- function(x) {
   #Helper function to return the appropriate xml value depending whether the value of interest is from a named node,
@@ -193,3 +214,62 @@ anyXmlParse <- function(url) {
   } else {return(xmlParse(url))}
 }
 
+
+hilltopEnsembleStatBkgnd<-function(dataxml){
+  #Helper Function that takes the parsed xml from an Ensemble Statistics request.
+  #Returns a single line dataframe of the STatistics background information
+  #This needs to be combined with the stats themselves to get a full dataframe.
+  bgtemp<-do.call(rbind, xpathApply(dataxml, "/HilltopServer", function(node) {
+    xp <- "./*"
+    attribute<-xpathSApply(node, xp, xmlName)
+    value<-xpathSApply(node, xp, function(x){
+      if(xmlName(x) %in% c("Hour", "Day", "Month")){xmlGetAttr(x,"Name")}else{xmlValue(x)}
+    })
+    data.frame(attribute, value, stringsAsFactors = FALSE)
+  }))
+  bgtemp<-subset(bgtemp, !attribute %in% c("Hour", "Day", "Month"))
+  
+  fintemp = setNames(data.frame(t(bgtemp[,-1])), bgtemp[,1])
+  
+  return(fintemp)
+}
+
+
+hilltopEnsembleStatByTimePeriod<-function(dataxml){
+  #Helper function that takes parsed xml from an EnsembleStats Request.
+  #Returns the statistics for each time period (depending whether hourly, monthly or annual stats)
+  period <- function(dataxml) {
+    #Helper function to determine what the measurement period of the EnsembleStats is.
+    if (length(xpathApply(dataxml, "/HilltopServer/Hour", xmlGetAttr, "Hour"))>0) {
+      return("Hour")} else if 
+    (length(xpathApply(dataxml, "/HilltopServer/Day", xmlGetAttr, "Day"))>0) {
+      return("Day")} else if (length(xpathApply(dataxml, "/HilltopServer/Month", xmlGetAttr, "Month"))>0) {
+        return("Month")}
+  }
+  
+  estatperiod<-period(dataxml)
+  
+  #Get the stats for each time period entry
+  Statistic <- xpathApply(dataxml, "/HilltopServer/Statistic",  xmlValue)
+  estat<-do.call(rbind, xpathApply(dataxml, paste("/HilltopServer/",estatperiod, sep=""), function(node) {
+    xp <- "./*"
+    periodID <- xpathSApply(node, ".", function(x){xmlGetAttr(x, "Name")})
+    
+    attribute<-xpathSApply(node, xp, xmlName)
+    value<-xpathSApply(node, xp, xmlValue) 
+    data.frame(periodID, attribute, value, stringsAsFactors = FALSE)
+  }))
+  
+  estest<-dcast(estat, periodID ~ attribute, value.var= "value")
+  estest$Statistic <- Statistic
+  
+  return(estest)
+}
+
+hilltopEnsembleStatFull <- function(dataxml) {
+  #Takes the parsed xml from an EnsembleStats Request.
+  #Returns a dataframe of the statistics for the period, along with the background information such as site measurement units etc.
+  bg <- hilltopEnsembleStatBkgnd(dataxml)
+  pe <- hilltopEnsembleStatByTimePeriod(dataxml)
+  full<-merge(bg, pe, by = c("Statistic"), all = TRUE)
+}

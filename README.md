@@ -31,6 +31,13 @@ Returns a dataframe of the measurement information and datasources.
 ###hilltopDsMeasListFull
 Takes an xml document from a Hilltop MeasurementList at a Site request. 
 Returns a dataframe of all of the datasource and measurement information combined.
+_Occasional issues with some datasources and measurements, hilltopMeasInfoListExtra is another option._
+
+###hilltopMeasInfoListExtra
+_Helper function._
+Takes an xml document from a Hilltop MeasurementList at a Site request. 
+Returns a dataframe of the measurement information and some datasource information.
+Similar to hilltopDsMeasListFull, but with limited datasource information.
 
 ###hilltopValueHelper
 _Helper function_
@@ -64,3 +71,19 @@ Function to check whether parsed xml is from a valid Hilltop Server.  Returns `T
 ###anyXmlParse
 _Helper function_
 Parses the xml from a url.  Checks whether the url is a secure server, if not uses `xmlParse` (XML Library).  If it is it uses RCurl functions to parse the data.
+
+###hilltopEnsembleStatBkgnd
+_Helper function_
+Given the parsed xml from an Ensemble Statistics request.
+Returns a single line dataframe of the STatistics background information
+This needs to be combined with the stats themselves to get a full dataframe. see hilltopEnsembleStatsFull, and hilltopEnsembleStatsByTimePeriod
+
+###hilltopEnsembleStatByTimePeriod
+_Helper function_
+Given the parsed xml from an EnsembleStats Request.
+Returns the statistics for each time period (depending whether hourly, daily, or monthly stats)
+ 
+###hilltopEnsembleStatFull
+Takes the parsed xml from an EnsembleStats Request.
+Returns a dataframe of the statistics for the period, along with the background information such as site, measurement, units and statistic.
+ 
