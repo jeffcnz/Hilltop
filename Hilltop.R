@@ -181,7 +181,7 @@ hilltopDataSourceToDF<-function(dataxml) {
     #Extract the measurement name from the xml and return this in a dataframe
     #that can be associated with the measuremnts.
     itemName <- dataxml[["string(//DataSource/@Name)"]]
-    data.frame(ItemName = itemName, , stringsAsFactors = FALSE)
+    data.frame(ItemName = itemName, stringsAsFactors = FALSE)
   }
   return(cdata)
 }
